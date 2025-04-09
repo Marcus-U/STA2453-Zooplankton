@@ -3,6 +3,8 @@
 *.sh
 #  Model weights 
 *.pth
+#  Output of training runs
+*.txt
 
 
 # Byte-compiled / optimized / DLL files
