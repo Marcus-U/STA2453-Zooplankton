@@ -1,8 +1,9 @@
 # User generated files
 #  Shell commands to run batch files on slurm cluster
 *.sh
-#  Model weights 
+#  Model weights and outputs 
 *.pth
+*.npy
 #  Output of training runs
 *.txt
 
