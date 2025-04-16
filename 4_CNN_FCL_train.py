@@ -126,6 +126,15 @@ class MultiModalNet(nn.Module):
         self.classifier = nn.Linear(combined_dim, num_classes)
 
     def forward(self, image, numeric):
+        """Forward pass through the network.
+
+        Args:
+            image (torch.Tensor): Batch of input images [batch_size, 1, H, W]
+            numeric (torch.Tensor): Batch of numeric features [batch_size, num_numeric_features]
+
+        Returns:
+            torch.Tensor: Class logits [batch_size, num_classes]
+        """
         # 1) Extract features from EfficientNet
         cnn_features = self.effnet(image)  # shape: [batch_size, 1280]
 
@@ -142,6 +151,21 @@ class MultiModalNet(nn.Module):
 
 # Training run loop
 def train_one_epoch(model, dataloader, optimizer, criterion, device):
+    """
+    Trains the model for one epoch on the training dataset.
+
+    Args:
+        model: The neural network model to train
+        dataloader: DataLoader containing the training data
+        optimizer: The optimizer for updating model weights
+        criterion: The loss function
+        device: Device to run training on (cuda/cpu)
+
+    Returns:
+        tuple: (average_loss, accuracy)
+            - average_loss (float): Mean loss over the epoch
+            - accuracy (float): Classification accuracy as percentage
+    """
     model.train() # Set to train to track gradients for back prop
     total_loss = 0.0
     correct = 0
@@ -173,6 +197,20 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device):
 
 # Validation run loop
 def validate_one_epoch(model, dataloader, criterion, device):
+    """
+    Tests the the model on the validation dataset.
+
+    Args:
+        model: The neural network model to train
+        dataloader: DataLoader containing the training data
+        criterion: The loss function
+        device: Device to run training on (cuda/cpu)
+
+    Returns:
+        tuple: (average_loss, accuracy)
+            - average_loss (float): Mean loss over the epoch
+            - accuracy (float): Classification accuracy as percentage
+    """
     model.eval()
     total_loss = 0.0
     correct = 0
@@ -216,6 +254,7 @@ def main():
 
 
     print("Transforming and preparing Dataset")
+
     transform = transforms.Compose([
         transforms.Resize((img_size, img_size)),  # Resize images to 50x50 pixels
         transforms.ToTensor(),
@@ -231,11 +270,13 @@ def main():
     labels = full_dataset.data["int_labels"] # Collect labels
 
     # First split: 90% (train+val) and 10% test
-    train_val_idx, test_idx = train_test_split(
-        indices, test_size=0.1, stratify=labels, random_state=42)
+    train_val_idx, test_idx = train_test_split( indices, test_size=0.1, stratify=labels, random_state=42)
     # Second split: of the 90%, split into train and validate
     train_idx, val_idx = train_test_split(
-        train_val_idx, test_size=2/9, stratify=labels.iloc[train_val_idx], random_state=42)
+                                train_val_idx, 
+                                test_size=2/9, 
+                                stratify=labels.iloc[train_val_idx], 
+                                random_state=42)
 
     # Create subsets for each split
     train_dataset = Subset(full_dataset, train_idx)
@@ -247,15 +288,8 @@ def main():
     for idx in train_idx:
         label = labels.iloc[idx]  
         class_counts[label] += 1
-    print("Class counts are: " + str(class_counts))
-    #Compute class weights to handle imbalance      
-    class_counts_val = [0] * num_classes
-    for idx in val_idx:
-        label_val = labels.iloc[idx]  
-        class_counts_val[label_val] += 1
-    print("Val Class counts are: " + str(class_counts_val))
 
-    # We can pass the "weight" to CrossEntropyLoss
+    # Pass the "weight" to CrossEntropyLoss
     total_train = len(train_dataset)
     class_weights = []
     for c in class_counts:
@@ -263,33 +297,27 @@ def main():
         w = total_train / (num_classes * (c ** power)) if c > 0 else 0.0
         class_weights.append(w)
     class_weights = torch.tensor(class_weights, dtype=torch.float)
-    print("Class weights are" + str(class_weights))
 
     # DataLoaders
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
-    # -------------------------------------------------------------------------
-    # D. Model, Loss, Optimizer
-    # -------------------------------------------------------------------------
+    # Setup Model
     model = MultiModalNet(num_numeric_features=43, num_classes= num_classes).to(device)
-    
     criterion = nn.CrossEntropyLoss(weight=class_weights.to(device))
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # -------------------------------------------------------------------------
-    # E. Training Loop
-    # -------------------------------------------------------------------------
+
     best_val_acc = 0.0
-    best_model_path = "best_multimodal_efficientnet_9class_FINAL.pth"
-
-    
-
+    best_model_path = "best_multimodal_efficientnet_FINAL.pth"
+    # Loop through the epochs
     for epoch in range(num_epochs):
+        # Do one loop of training and validation
         train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, criterion, device)
         val_loss, val_acc = validate_one_epoch(model, val_loader, criterion, device)
 
+        # Report resulting accuracy
         print(f"Epoch [{epoch+1}/{num_epochs}] "
               f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.2f}% | "
               f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.2f}%")
@@ -300,10 +328,7 @@ def main():
             torch.save(model.state_dict(), best_model_path)
             print(f"New best model saved with validation accuracy: {best_val_acc:.2f}%")
 
-    # -------------------------------------------------------------------------
-    # F. Evaluate on Test Set using the best model
-    # -------------------------------------------------------------------------
-
+    # High level report of test accuracy
     model.load_state_dict(torch.load(best_model_path))
     test_loss, test_acc = validate_one_epoch(model, test_loader, criterion, device)
     print(f"Test Loss: {test_loss:.4f} | Test Acc: {test_acc:.2f}%")

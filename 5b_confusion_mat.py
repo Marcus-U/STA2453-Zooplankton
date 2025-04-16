@@ -200,8 +200,7 @@ def main():
     csv_file = r"combined_data.csv"  # CSV file with image paths, numeric features, and label
     image_dir = r"data"              # Directory with images
     batch_size = 256
-    num_epochs = 20
-    learning_rate = 1e-3
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # Run on GPU if possible
     print("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -222,18 +221,15 @@ def main():
     labels = full_dataset.data["int_labels"] # Collect labels
 
     # First split: 90% (train+val) and 10% test
-    train_val_idx, test_idx = train_test_split(
+    _, test_idx = train_test_split(
         indices, test_size=0.1, stratify=labels, random_state=42)
-    # Second split: of the 90%, split into train and validate
-    train_idx, val_idx = train_test_split(
-        train_val_idx, test_size=2/9, stratify=labels.iloc[train_val_idx], random_state=42)
 
     test_dataset = Subset(full_dataset, test_idx)
 
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
     model = MultiModalNet(num_numeric_features=43, num_classes= num_classes).to(device)
-    best_model_path = "best_multimodal_efficientnet_9class_FINAL.pth"
+    best_model_path = "best_multimodal_efficientnet_FINAL.pth"
 
     model.load_state_dict(torch.load(best_model_path))
     print("Loaded Model")
